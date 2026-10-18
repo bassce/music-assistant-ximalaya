@@ -1,0 +1,122 @@
+{
+  "config_entries": {
+    "account_identity": {
+      "label": "喜马拉雅账号：{0}"
+    },
+    "audio_quality": {
+      "label": "音质",
+      "description": "按当前账号可用资源选择音质。所选档位缺失时优先使用较低档位，仅有更高档位时使用该资源。修改后重新播放生效。",
+      "options": {
+        "highest": "最高可用",
+        "high": "高清",
+        "standard": "标准"
+      }
+    },
+    "search_cache_minutes": {
+      "label": "搜索缓存时长（分钟）",
+      "description": "搜索结果内容缓存。可提升除第一次点击外搜索结果显示的时间，建议设置1-10分钟之间"
+    },
+    "subscription_write": {
+      "label": "订阅同步",
+      "description": "将喜马拉雅中的我的订阅内容同步到MA，添加或删除 MA 媒体库专辑时，将同步订阅、取消订阅喜马拉雅的订阅"
+    },
+    "subscription_check_interval": {
+      "label": "订阅同步检查间隔",
+      "options": {
+        "1": "1 分钟",
+        "5": "5 分钟",
+        "15": "15 分钟",
+        "30": "30 分钟",
+        "60": "60 分钟"
+      }
+    },
+    "cloud_progress_write": {
+      "label": "收听进度同步",
+      "description": "同步喜马拉雅播放历史"
+    },
+    "skip_sync": {
+      "label": "跳过片头片尾同步",
+      "description": "同步app中跳过片头片尾的设置"
+    },
+    "sound_query": {
+      "label": "声音搜索词"
+    },
+    "api_url": {
+      "label": "外置 API 地址"
+    },
+    "service_key": {
+      "label": "服务访问密钥（首次本机连接可留空）"
+    },
+    "reauthorize": {
+      "label": "重新扫码登录"
+    },
+    "client_json": {
+      "label": "中国版客户端配置 JSON",
+      "description": "导入客户端 JSON，用于后端登录。"
+    }
+  },
+  "setup_flow": {
+    "api_connection": {
+      "title": "连接喜马拉雅",
+      "description": "连接本地喜马拉雅 API 服务。账号设置和扫码登录均在 MA 内完成。"
+    },
+    "client_config": {
+      "title": "客户端配置",
+      "description": "提供中国版喜马拉雅客户端配置。"
+    },
+    "scan_qr": {
+      "title": "扫码登录",
+      "description": "请用中国版喜马拉雅 App 扫码并确认登录。二维码过期后自动刷新。"
+    }
+  },
+  "media": {
+    "recommendations": {
+      "recent_listening": {
+        "name": "喜马拉雅 · 最近收听",
+        "subtitle": "账号云端历史 · 最近 20 条"
+      },
+      "discovery": {
+        "name": "喜马拉雅",
+        "subtitle": "电台广播 · 热播榜单 · 猜你喜欢 · 详细分类"
+      }
+    },
+    "folder": {
+      "subscriptions": {
+        "name": "喜马拉雅订阅"
+      },
+      "recent_listening": {
+        "name": "最近收听"
+      },
+      "discovery": {
+        "name": "分类显示"
+      },
+      "radio": {
+        "name": "电台广播"
+      },
+      "hot": {
+        "name": "热播榜单"
+      },
+      "recommendations": {
+        "name": "猜你喜欢"
+      },
+      "groups": {
+        "name": "详细分类"
+      },
+      "previous_page": {
+        "name": "上一页"
+      },
+      "next_page": {
+        "name": "下一页（{0}/{1}）"
+      },
+      "previous_chapters": {
+        "name": "上一页（第 {0}–{1} 章，共 {2} 章）"
+      },
+      "next_chapters": {
+        "name": "下一页（第 {0}–{1} 章，共 {2} 章）"
+      }
+    }
+  },
+  "manifest": {
+    "description": "使用中国版账号和本地 API 后端收听喜马拉雅专辑、声音及广播。"
+  }
+}

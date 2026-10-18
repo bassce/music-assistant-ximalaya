@@ -1,0 +1,123 @@
+{
+  "config_entries": {
+    "account_identity": {
+      "label": "Ximalaya account: {0}"
+    },
+    "audio_quality": {
+      "label": "Audio quality",
+      "description": "Use audio available to your account. Prefer a lower tier if the selected tier is unavailable; use a higher tier only when it is the only available resource. Restart playback to apply changes.",
+      "options": {
+        "highest": "Highest available",
+        "high": "High",
+        "standard": "Standard"
+      }
+    },
+    "search_cache_minutes": {
+      "label": "Search cache duration (minutes)",
+      "description": "Cache search results to speed up repeated browsing. A duration of 1–10 minutes is recommended."
+    },
+    "subscription_write": {
+      "label": "Subscription synchronization",
+      "description": "Import Ximalaya subscriptions into MA. Adding or removing a library album also subscribes or unsubscribes on Ximalaya."
+    },
+    "subscription_check_interval": {
+      "label": "Subscription check interval",
+      "options": {
+        "1": "1 minutes",
+        "5": "5 minutes",
+        "15": "15 minutes",
+        "30": "30 minutes",
+        "60": "60 minutes"
+      }
+    },
+    "cloud_progress_write": {
+      "label": "Listening progress synchronization",
+      "description": "Synchronize listening progress with Ximalaya."
+    },
+    "skip_sync": {
+      "label": "Skip intro and outro",
+      "description": "Use the intro and outro settings from the Ximalaya app."
+    },
+    "sound_query": {
+      "label": "Episode search query"
+    },
+    "api_url": {
+      "label": "API service address"
+    },
+    "service_key": {
+      "label": "Service access key",
+      "description": "Leave empty when pairing with the local service for the first time."
+    },
+    "reauthorize": {
+      "label": "Sign in again using a QR code"
+    },
+    "client_json": {
+      "label": "Chinese client configuration JSON",
+      "description": "Import the client configuration used by the backend to sign in."
+    }
+  },
+  "setup_flow": {
+    "api_connection": {
+      "title": "Connect Ximalaya",
+      "description": "Connect the local Ximalaya API service. Account settings and QR sign-in remain in Music Assistant."
+    },
+    "client_config": {
+      "title": "Client configuration",
+      "description": "Provide your Chinese Ximalaya client configuration."
+    },
+    "scan_qr": {
+      "title": "Scan to sign in",
+      "description": "Scan with the Chinese Ximalaya app and confirm. An expired QR code refreshes automatically."
+    }
+  },
+  "media": {
+    "recommendations": {
+      "recent_listening": {
+        "name": "Ximalaya · Recently listened",
+        "subtitle": "Account history · Latest 20 items"
+      },
+      "discovery": {
+        "name": "Ximalaya",
+        "subtitle": "Radio · Charts · Recommendations · Categories"
+      }
+    },
+    "folder": {
+      "subscriptions": {
+        "name": "Ximalaya subscriptions"
+      },
+      "recent_listening": {
+        "name": "Recently listened"
+      },
+      "discovery": {
+        "name": "Browse categories"
+      },
+      "radio": {
+        "name": "Radio"
+      },
+      "hot": {
+        "name": "Charts"
+      },
+      "recommendations": {
+        "name": "For you"
+      },
+      "groups": {
+        "name": "Categories"
+      },
+      "previous_page": {
+        "name": "Previous page"
+      },
+      "next_page": {
+        "name": "Next page ({0}/{1})"
+      },
+      "previous_chapters": {
+        "name": "Previous page (chapters {0}–{1} of {2})"
+      },
+      "next_chapters": {
+        "name": "Next page (chapters {0}–{1} of {2})"
+      }
+    }
+  },
+  "manifest": {
+    "description": "Listen to Chinese Ximalaya albums, episodes and radio using your account and a local API backend."
+  }
+}

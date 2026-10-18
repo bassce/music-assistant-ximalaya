@@ -1,0 +1,14 @@
+{
+  "type": "music",
+  "domain": "ximalaya",
+  "stage": "alpha",
+  "name": "Ximalaya (China)",
+  "description": "Listen to Chinese Ximalaya albums, episodes and radio using your account and a local API backend.",
+  "codeowners": [
+    "@bassce"
+  ],
+  "multi_instance": true,
+  "self_service": false,
+  "requirements": [],
+  "documentation": "https://github.com/bassce/music-assistant-ximalaya/blob/main/README.md"
+}
