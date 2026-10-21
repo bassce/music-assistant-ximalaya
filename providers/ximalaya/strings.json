@@ -54,6 +54,10 @@
     "client_json": {
       "label": "Chinese client configuration JSON",
       "description": "Import the client configuration used by the backend to sign in."
+    },
+    "local_chapter_resume": {
+      "label": "Resume chapters locally",
+      "description": "Save each audiobook chapter independently in your local API and resume on return. Requires API 0.1.8. This does not upload progress to Ximalaya. Disable to restart chapters from their beginning."
     }
   },
   "setup_flow": {

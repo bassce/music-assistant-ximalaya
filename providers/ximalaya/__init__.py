@@ -1,3 +1,4 @@
+# Copyright (c) 2026 ha_ximalaya contributors
 """China-only Ximalaya provider for Music Assistant."""
 
 from __future__ import annotations
@@ -7,16 +8,13 @@ import html
 import json
 import re
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from contextlib import aclosing
 
 # ruff: noqa: RUF001 -- Chinese messages and punctuation are intentional.
 from typing import TYPE_CHECKING, Any
 from weakref import WeakValueDictionary
 
 import aiohttp
-from music_assistant.controllers.music.constants import CACHE_CATEGORY_SEARCH_RESULTS
-from music_assistant.controllers.music.media.audiobooks import AudiobooksController
-from music_assistant.controllers.music.media.podcasts import PodcastsController
-from music_assistant.models.music_provider import CACHE_CATEGORY_PREV_LIBRARY_IDS, MusicProvider
 from music_assistant_models.config_entries import ConfigEntry, ConfigValueOption
 from music_assistant_models.enums import (
     ArtistType,
@@ -50,18 +48,30 @@ from music_assistant_models.media_items import (
 )
 from music_assistant_models.streamdetails import StreamDetails
 
+from music_assistant.controllers.music.constants import CACHE_CATEGORY_SEARCH_RESULTS
+from music_assistant.controllers.music.media.audiobooks import AudiobooksController
+from music_assistant.controllers.music.media.podcasts import PodcastsController
+from music_assistant.models.music_provider import CACHE_CATEGORY_PREV_LIBRARY_IDS, MusicProvider
+
 from .audio_cache import AudioCache
 from .client import CarClient, cdn_url
 from .discovery import DiscoveryMixin
 from .labels import config_entry
+from .local_chapter_resume import LocalChapterResume
 from .longform import Chapters, LongformMixin
 from .normalization import Normalizer
 from .protocol import AuthenticationError, CarError, NotFound, PermissionDenied, item_id
+from .resume_audio import book_audio
 
 if TYPE_CHECKING:
-    from music_assistant.mass import MusicAssistant
     from music_assistant_models.config_entries import ProviderConfig
     from music_assistant_models.provider import ProviderManifest
+
+    from music_assistant.mass import MusicAssistant
+
+    from .resume_preload import ResumePreloader
+
+PROVIDER_VERSION = "0.1.8"
 
 SUPPORTED_FEATURES = {
     ProviderFeature.SEARCH,
@@ -105,6 +115,7 @@ class XimalayaProvider(DiscoveryMixin, LongformMixin, MusicProvider):
     _part_users: dict[str, str | None]
     _part_books: dict[str, tuple[str, Chapters]]
     _audio_cache: AudioCache
+    _resume_preloader: ResumePreloader
     _normalizer: Normalizer
     _failed_parts: set[str]
     _recovery_tasks: set[asyncio.Task[None]]
@@ -192,6 +203,11 @@ class XimalayaProvider(DiscoveryMixin, LongformMixin, MusicProvider):
                 options=[ConfigValueOption(value=minutes) for minutes in (1, 5, 15, 30, 60)],
             ),
             config_entry(
+                key="local_chapter_resume",
+                type=ConfigEntryType.BOOLEAN,
+                default_value=True,
+            ),
+            config_entry(
                 key="cloud_progress_write",
                 type=ConfigEntryType.BOOLEAN,
                 default_value=False,
@@ -230,6 +246,12 @@ class XimalayaProvider(DiscoveryMixin, LongformMixin, MusicProvider):
     async def loaded_in_mass(self) -> None:
         """Start queue metadata hydration and subscription monitoring."""
         self._start_queue_chapters()
+        if self.config.get_value("local_chapter_resume", True):
+            if getattr(self._client, "chapter_progress_supported", False):
+                self._local_chapter_resume = LocalChapterResume(self)
+                self._local_chapter_resume.start()
+            else:
+                self.logger.warning("分集本地续播需要喜马拉雅 API 0.1.8，请先更新 API")
         # The built-in scheduler only supports whole hours. Keep its initial/manual
         # sync and trigger the same managed tasks on the provider's minute interval.
         self._subscription_task = (
@@ -286,6 +308,11 @@ class XimalayaProvider(DiscoveryMixin, LongformMixin, MusicProvider):
 
     async def unload(self, is_removed: bool = False) -> None:
         """Stop provider tasks and release playback resources."""
+        if monitor := getattr(self, "_local_chapter_resume", None):
+            await monitor.close()
+            self._local_chapter_resume = None
+        if preloader := getattr(self, "_resume_preloader", None):
+            await preloader.close()
         if task := getattr(self, "_subscription_task", None):
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
@@ -522,6 +549,14 @@ class XimalayaProvider(DiscoveryMixin, LongformMixin, MusicProvider):
             allow_seek=True,
             expiration=0,
         )
+
+    async def get_audio_stream(
+        self, streamdetails: StreamDetails, seek_position: int = 0
+    ) -> AsyncGenerator[bytes]:
+        """Serve native book audio while suppressing a pending resume's opening."""
+        async with aclosing(book_audio(self, streamdetails, seek_position)) as source:
+            async for chunk in source:
+                yield chunk
 
     def _align_subscription_options(self) -> None:
         """Keep MA's scheduler and write-back gates tied to the visible master switch."""

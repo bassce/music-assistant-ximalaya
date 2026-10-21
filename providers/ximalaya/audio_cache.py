@@ -1,3 +1,4 @@
+# Copyright (c) 2026 ha_ximalaya contributors
 """Per-playback RAM read-ahead; never persist audio, credentials or signed URLs."""
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from urllib.parse import urlsplit
 
 import aiohttp
 
+from .playback_source import PlaybackResolver
 from .protocol import CarError, PermissionDenied, PreparationError
 from .resource import ATTEMPTS, RANGE, RETRY_DELAYS, TIMEOUT, RelayError, Resource
 
@@ -80,6 +82,8 @@ class CacheSession:
         self.resolve: Callable[[str], Awaitable[tuple[str, float]]] = provider._client.resolve
         self.resolve_prefetch: Callable[[str], Awaitable[tuple[str, float]]] | None = None
         self.refresh_source: Callable[[str], Awaitable[None]] | None = None
+        self.playback_resolver: PlaybackResolver | None = None
+        self.queue_id: str | None = None
         self.budget = CacheBudget()
         self.seed: Prefetched | None = None
         self.warmer: asyncio.Task[None] | None = None
@@ -163,6 +167,8 @@ class CacheSession:
             self.expiry.cancel()
             self.expiry = None
         self.clear_prefetch()
+        if self.playback_resolver:
+            self.playback_resolver.entries.clear()
         for buffer in tuple(self.active):
             buffer.cancel()
 
@@ -284,6 +290,13 @@ class AudioCache:
             self.sessions[key] = CacheSession(self.provider)
         return self.sessions[key]
 
+    def pcm_session(self, token: str, queue_id: str | None = None) -> CacheSession:
+        """Keep range-resolution identity stable as MA replaces its current stream."""
+        session = self.session((None, None, "pcm", token))
+        if queue_id:
+            session.queue_id = queue_id
+        return session
+
     async def close(self) -> None:
         """Cancel work and release buffered resources."""
         tasks = []
@@ -301,11 +314,13 @@ class AudioCache:
         for key, session in self.sessions.items():
             if not isinstance(key, tuple) or session.closed:
                 continue
-            queue = self.provider.mass.player_queues.get(key[0] or "")
+            queue = self.provider.mass.player_queues.get(session.queue_id or key[0] or "")
             state = str(queue.state) if queue else "idle"
             if state == "playing":
                 session.seen_playing = True
             elif session.seen_playing and state in ("idle", "paused"):
+                if queue and getattr(queue, "extra_attributes", {}).get("play_action_in_progress"):
+                    continue  # A native seek may briefly park the existing playback.
                 session.close()
 
 

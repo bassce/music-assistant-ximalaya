@@ -1,3 +1,4 @@
+# Copyright (c) 2026 ha_ximalaya contributors
 """Bounded, byte-exact chapter relay; signed CDN URLs never reach the decoder."""
 
 from __future__ import annotations
@@ -16,12 +17,13 @@ import aiohttp
 from aiohttp import web
 
 from .audio_cache import AudioCache, ReadAhead
+from .playback_source import PlaybackResolver
 from .protocol import CarError, PermissionDenied, PreparationError
 from .resource import ATTEMPTS, RANGE, RETRY_DELAYS, RelayError
 
 
 async def proxy_chapter(  # noqa: PLR0915 -- Keep response, prefetch seed and reader cleanup under one lifetime.
-    provider: XimalayaProvider, request: web.Request, ident: str, token: str
+    provider: XimalayaProvider, request: web.Request, ident: str, token: str, *, raw: bool = False
 ) -> web.StreamResponse:
     """Serve bytes immediately while a separate task maintains the read-ahead window."""
     requested = request.headers.get("Range")
@@ -35,12 +37,23 @@ async def proxy_chapter(  # noqa: PLR0915 -- Keep response, prefetch seed and re
         provider._cache_owner(token) if hasattr(provider, "_cache_owner") else token
     )
     normalizer: Normalizer | None = getattr(provider, "_normalizer", None)
-    normalize = normalizer is not None and token in provider._part_books
+    normalize = not raw and normalizer is not None and token in provider._part_books
     if normalize and normalizer is not None:
         # A new playback can choose a different target after quality fallback.
         # Do not carry encoded bytes across those decoder sessions.
         key = (*key, token) if isinstance(key, tuple) else (key, None, token)
-    cache = provider._audio_cache.session(key)
+    cache = (
+        provider._audio_cache.pcm_session(token, key[0] if isinstance(key, tuple) else None)
+        if raw
+        else provider._audio_cache.session(key)
+    )
+    if raw:
+        if cache.playback_resolver is None:
+            cache.playback_resolver = PlaybackResolver(provider)
+            cache.resolve = cache.playback_resolver.resolve
+            cache.refresh_source = cache.playback_resolver.refresh
+            # Speculative next-chapter reads must not satisfy its later authorization.
+            cache.resolve_prefetch = provider._client.resolve
     if normalize and normalizer is not None:
 
         async def resolve(ident: str) -> tuple[str, float]:

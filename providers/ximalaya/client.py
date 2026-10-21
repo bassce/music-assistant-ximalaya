@@ -116,6 +116,7 @@ class GatewayClient:
         self.nickname = credentials.get("nickname", "")
         self.token = {"uid": credentials.get("uid")}  # identity only; no upstream token in MA
         self.verified = False
+        self.chapter_progress_supported = False
         self.save = save
         self._duration_hints: dict[str, int] = {}
         self.pending_session: str | None = None
@@ -226,6 +227,7 @@ class GatewayClient:
             raise AuthenticationError("外置 API 返回的账号与当前实例不一致")
         if data.get("bookmark_schema") != 1:
             raise CarError("请先将喜马拉雅 API 更新至 0.1.5 或更新的兼容版本，以支持账号断点")
+        self.chapter_progress_supported = data.get("chapter_bookmark_schema") == 1
         self.nickname = data.get("nickname") or ""
         self.verified = True
 
@@ -308,6 +310,28 @@ class GatewayClient:
             track_id, probe_unknown_duration=probe_unknown_duration
         )
         return url, duration
+
+    async def resolve_playback(self, track_id: str) -> dict[str, Any]:
+        """Get a fresh authorized URL and independent local chapter progress together."""
+        return await self.rpc("resolve_source", track_id=track_id)
+
+    async def chapter_progress(self, track_id: str) -> dict[str, Any]:
+        return await self.request("GET", f"/v1/tracks/{item_id(track_id)}/local-progress")
+
+    async def save_chapter_progress(
+        self,
+        track_id: str,
+        position_ms: int,
+        fully_played: bool,
+        *,
+        observed_at: float | None = None,
+    ) -> dict[str, Any]:
+        return await self.request(
+            "PUT",
+            f"/v1/tracks/{item_id(track_id)}/local-progress",
+            {"position_ms": position_ms, "fully_played": fully_played, "observed_at": observed_at},
+            request_timeout=5,
+        )
 
     async def resolve_radio(self, radio_id: str) -> str:
         """Return a server-side station media ticket."""

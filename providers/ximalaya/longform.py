@@ -1,3 +1,4 @@
+# Copyright (c) 2026 ha_ximalaya contributors
 """Native chapter playback and account-scoped progress for MA 2.10.6."""
 
 from __future__ import annotations
@@ -7,9 +8,10 @@ from collections.abc import AsyncGenerator, Awaitable
 # ruff: noqa: RUF001 -- Chinese messages and punctuation are intentional.
 from typing import TYPE_CHECKING, Any, cast
 
+from music_assistant_models.media_items import MediaItemType, Podcast
+
 from music_assistant.controllers.music.media.audiobooks import AudiobooksController
 from music_assistant.controllers.music.media.podcasts import PodcastsController
-from music_assistant_models.media_items import MediaItemType, Podcast
 
 if TYPE_CHECKING:
     from music_assistant_models.event import MassEvent
@@ -51,9 +53,11 @@ from music_assistant_models.media_items import (
 from music_assistant_models.streamdetails import MultiPartPath, StreamDetails
 
 from .audio_cache import AudioCache
+from .book_pcm import pcm_format
 from .bookmarks import import_journal, progress_user, read_bookmark, save_bookmark
 from .normalization import Normalizer
 from .protocol import CarError, item_id
+from .resume_preload import ResumePreloader
 from .streaming import proxy_chapter
 
 
@@ -352,6 +356,7 @@ class LongformMixin:
         self._provider._part_users = {}
         self._provider._part_books = {}
         self._provider._audio_cache = AudioCache(self._provider)
+        self._provider._resume_preloader = ResumePreloader(self._provider)
         self._provider._normalizer = Normalizer(self._provider)
         self._provider._failed_parts = set()
         self._provider._recovery_tasks = set()
@@ -904,9 +909,11 @@ class LongformMixin:
             provider=self._provider.instance_id,
             item_id=album_id,
             media_type=MediaType.AUDIOBOOK,
-            stream_type=StreamType.HTTP,
+            stream_type=StreamType.CUSTOM,
             audio_format=AudioFormat(content_type=ContentType.M4A),
+            decoded_audio_format=pcm_format(),
             path=parts,
+            data={"chapters": chapters, "relay_session": token},
             duration=chapters.duration,
             can_seek=True,
             allow_seek=True,
@@ -1000,7 +1007,13 @@ class LongformMixin:
 
     def _skip_transitioning(self, queue_id: str) -> bool:
         queue = self._provider.mass.player_queues.get(queue_id)
-        return not queue or queue.state != PlaybackState.PLAYING
+        monitor = getattr(self._provider, "_local_chapter_resume", None)
+        return (
+            not queue
+            or queue.state != PlaybackState.PLAYING
+            or getattr(queue, "extra_attributes", {}).get("play_action_in_progress", False)
+            or bool(monitor and monitor.transitioning(queue_id))
+        )
 
     async def _skip_queue(self, queue_id: str) -> None:
         if (
@@ -1057,8 +1070,12 @@ class LongformMixin:
                 if target < duration:
                     await self._provider.mass.player_queues.seek(queue_id, target)
                 elif current.next_item:
+                    if monitor := getattr(self._provider, "_local_chapter_resume", None):
+                        await monitor.mark_tail_completed(queue_id)
                     await self._provider.mass.player_queues.next(queue_id)
                 else:
+                    if monitor := getattr(self._provider, "_local_chapter_resume", None):
+                        await monitor.mark_tail_completed(queue_id)
                     await self._provider.mass.player_queues.stop(queue_id)
             except MusicAssistantError:
                 self._provider.logger.warning("播放器暂时无法执行片头片尾跳转")
@@ -1069,7 +1086,9 @@ class LongformMixin:
         if not session or session[0] < time.monotonic() or ident not in session[1]:
             return web.Response(status=404)
         self._provider._part_sessions[token] = (time.monotonic() + 86400, session[1])
-        return await proxy_chapter(self._provider, request, ident, token)
+        return await proxy_chapter(
+            self._provider, request, ident, token, raw=request.query.get("raw") == "1"
+        )
 
     @staticmethod
     def _stream_has_token(details: StreamDetails | None, token: str) -> bool:

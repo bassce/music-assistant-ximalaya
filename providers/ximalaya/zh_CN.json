@@ -53,6 +53,10 @@
     "client_json": {
       "label": "中国版客户端配置 JSON",
       "description": "导入客户端 JSON，用于后端登录。"
+    },
+    "local_chapter_resume": {
+      "label": "分集本地续播",
+      "description": "每集独立保存本地进度和完播状态，切回章节时自动续播。需要 API 0.1.8；不会上传喜马拉雅。关闭后仍保留记录，可从章节起点重播。"
     }
   },
   "setup_flow": {
