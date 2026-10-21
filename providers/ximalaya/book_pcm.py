@@ -1,3 +1,4 @@
+# Copyright (c) 2026 ha_ximalaya contributors
 """Seek each original chapter before decoding; join bounded PCM through the Provider API."""
 
 from __future__ import annotations
@@ -15,6 +16,8 @@ from music_assistant_models.errors import AudioError
 from music_assistant_models.media_items import AudioFormat
 
 from music_assistant.helpers.ffmpeg import get_ffmpeg_stream
+
+from .playback_sessions import hold_session, stream_token
 
 if TYPE_CHECKING:
     from music_assistant_models.streamdetails import StreamDetails
@@ -40,6 +43,16 @@ async def chapter_audio(
     provider: XimalayaProvider, stream: StreamDetails, seek_position: int
 ) -> AsyncGenerator[bytes]:
     """Honor MA's requested absolute position without changing its clock or metadata."""
+    with hold_session(provider, stream_token(stream)):
+        async with aclosing(_chapter_audio(provider, stream, seek_position)) as source:
+            async for chunk in source:
+                yield chunk
+
+
+async def _chapter_audio(
+    provider: XimalayaProvider, stream: StreamDetails, seek_position: int
+) -> AsyncGenerator[bytes]:
+    """Decode the complete timeline under the caller's playback-session lease."""
     chapters = stream.data.get("chapters") if isinstance(stream.data, dict) else None
     if (
         chapters is None

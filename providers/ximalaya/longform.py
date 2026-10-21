@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 import asyncio
 import json
 import math
-import secrets
 import time
 from bisect import bisect_right
 from copy import deepcopy
@@ -56,6 +55,7 @@ from .audio_cache import AudioCache
 from .book_pcm import pcm_format
 from .bookmarks import import_journal, progress_user, read_bookmark, save_bookmark
 from .normalization import Normalizer
+from .playback_sessions import SESSION_TTL, hold_session, new_session
 from .protocol import CarError, item_id
 from .resume_preload import ResumePreloader
 from .streaming import proxy_chapter
@@ -355,6 +355,7 @@ class LongformMixin:
         self._provider._part_sessions = {}
         self._provider._part_users = {}
         self._provider._part_books = {}
+        self._provider._part_uses = {}
         self._provider._audio_cache = AudioCache(self._provider)
         self._provider._resume_preloader = ResumePreloader(self._provider)
         self._provider._normalizer = Normalizer(self._provider)
@@ -864,28 +865,11 @@ class LongformMixin:
             chapters,
             settings_ready=True,
         )
-        now = time.monotonic()
-        self._provider._part_sessions = {
-            k: v for k, v in self._provider._part_sessions.items() if v[0] > now
-        }
-        self._provider._part_users = {
-            k: v
-            for k, v in self._provider._part_users.items()
-            if k in self._provider._part_sessions
-        }
-        self._provider._part_books = {
-            k: v
-            for k, v in self._provider._part_books.items()
-            if k in self._provider._part_sessions
-        }
-        self._provider._failed_parts.intersection_update(self._provider._part_sessions)
-        if len(self._provider._part_sessions) >= 64:
-            raise ResourceTemporarilyUnavailable("同时播放的有声书过多，请稍后重试")
-        token = secrets.token_urlsafe(32)
-        self._provider._part_sessions[token] = (now + 86400, {str(x["id"]) for x in chapters.rows})
-        self._provider._part_books[token] = (album_id, chapters)
         user = await progress_user(self._provider)
-        self._provider._part_users[token] = user.user_id if user else None
+        token = new_session(
+            self._provider, {str(row["id"]) for row in chapters.rows}, user.user_id if user else None
+        )
+        self._provider._part_books[token] = (album_id, chapters)
         parts = [
             MultiPartPath(
                 path=f"{self._provider.mass.streams.base_url}/{self._provider.instance_id}_chapter?session={token}&id={row['id']}",
@@ -1085,10 +1069,11 @@ class LongformMixin:
         session = self._provider._part_sessions.get(token)
         if not session or session[0] < time.monotonic() or ident not in session[1]:
             return web.Response(status=404)
-        self._provider._part_sessions[token] = (time.monotonic() + 86400, session[1])
-        return await proxy_chapter(
-            self._provider, request, ident, token, raw=request.query.get("raw") == "1"
-        )
+        self._provider._part_sessions[token] = (time.monotonic() + SESSION_TTL, session[1])
+        with hold_session(self._provider, token):
+            return await proxy_chapter(
+                self._provider, request, ident, token, raw=request.query.get("raw") == "1"
+            )
 
     @staticmethod
     def _stream_has_token(details: StreamDetails | None, token: str) -> bool:
@@ -1141,27 +1126,8 @@ class LongformMixin:
         return None
 
     async def _episode_cache_path(self, ident: str) -> str:
-        now = time.monotonic()
-        self._provider._part_sessions = {
-            k: v for k, v in self._provider._part_sessions.items() if v[0] > now
-        }
-        self._provider._part_users = {
-            k: v
-            for k, v in self._provider._part_users.items()
-            if k in self._provider._part_sessions
-        }
-        self._provider._part_books = {
-            k: v
-            for k, v in self._provider._part_books.items()
-            if k in self._provider._part_sessions
-        }
-        self._provider._failed_parts.intersection_update(self._provider._part_sessions)
-        if len(self._provider._part_sessions) >= 64:
-            raise ResourceTemporarilyUnavailable("同时播放的音频过多，请稍后重试")
-        token = secrets.token_urlsafe(32)
-        self._provider._part_sessions[token] = (now + 86400, {ident})
         user = await progress_user(self._provider)
-        self._provider._part_users[token] = user.user_id if user else None
+        token = new_session(self._provider, {ident}, user.user_id if user else None)
         return (
             f"{self._provider.mass.streams.base_url}/{self._provider.instance_id}_chapter"
             f"?session={token}&id={ident}"

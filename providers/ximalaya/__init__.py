@@ -113,6 +113,7 @@ class XimalayaProvider(DiscoveryMixin, LongformMixin, MusicProvider):
     _catalog_locks: WeakValueDictionary[str, asyncio.Lock]
     _part_sessions: dict[str, tuple[float, set[str]]]
     _part_users: dict[str, str | None]
+    _part_uses: dict[str, int]
     _part_books: dict[str, tuple[str, Chapters]]
     _audio_cache: AudioCache
     _resume_preloader: ResumePreloader
@@ -349,6 +350,7 @@ class XimalayaProvider(DiscoveryMixin, LongformMixin, MusicProvider):
             self._part_sessions.clear()
             self._part_users.clear()
             self._part_books.clear()
+            self._part_uses.clear()
             self._progress_sessions.clear()
         if self._session:
             await self._session.close()
